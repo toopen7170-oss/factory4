@@ -6,17 +6,13 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,txt,mp3,ttf
 source.include_patterns = font/*.ttf
 version = 1.0.0
-
-# 💡 [최종 버그 픽스] 다운로드 404 에러 방지를 위해 정확한 패치 버전(3.11.9) 명시
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.0,pillow,pyjnius
-
+requirements = python3,kivy==2.3.0,pillow,pyjnius
 android.permissions = BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_CONNECT, BLUETOOTH_SCAN, ACCESS_FINE_LOCATION, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
 android.sdk = 33
-android.build_tools_version = 33.0.2
-android.accept_sdk_license = True
+android.ndk_api = 21
 android.archs = arm64-v8a
 orientation = landscape
 fullscreen = 1
