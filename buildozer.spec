@@ -4,7 +4,6 @@ package.name = factory4
 package.domain = com.factory.cycling
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,txt,mp3,ttf
-# 💡 [핵심 수정] 기존 assets/* 대신 font 폴더 내의 폰트를 모두 포함하도록 변경
 source.include_patterns = font/*.ttf
 version = 1.0.0
 requirements = python3,kivy==2.3.0,pillow,pyjnius
@@ -13,7 +12,9 @@ android.api = 33
 android.minapi = 21
 android.ndk = 25b
 android.sdk = 33
-android.ndk_api = 21
+# 💡 [버그 픽스] Build-Tools 37 강제 다운로드 방지 및 라이선스 승인
+android.build_tools_version = 33.0.2
+android.accept_sdk_license = True
 android.archs = arm64-v8a
 orientation = landscape
 fullscreen = 1
