@@ -11,7 +11,7 @@ package.domain = com.factory.cycling
 # (str) Source code where the main.py lives
 source.dir = .
 
-# (list) Source files to include (ttf 확장자를 명시적으로 영구 포함)
+# (list) Source files to include
 source.include_exts = py,png,jpg,kv,atlas,txt,mp3,ttf
 
 # (list) List of inclusions using pattern matching
@@ -21,10 +21,10 @@ source.include_patterns = font/*.ttf
 version = 1.0.0
 
 # (list) Application requirements
-# 💡 Python 3.14 C-API 컴파일 충돌 오류 방지를 위해 호환성 검증이 완료된 3.11 버전으로 정밀 격리 조치
-requirements = python3==3.11,kivy==2.3.0,pillow,pyjnius
+# 💡 핵심 수정: python3와 hostpython3 모두 3.11로 완벽히 고정하여 C-API 충돌 방어
+requirements = python3==3.11,hostpython3==3.11,kivy==2.3.0,pillow,pyjnius
 
-# (str) Supported orientations (가로 전면 모드 고정)
+# (str) Supported orientations
 orientation = landscape
 
 # (bool) Indicate if the application should be fullscreen or not
