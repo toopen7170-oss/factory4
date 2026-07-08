@@ -35,7 +35,7 @@ class MasterCoreEngine(FloatLayout):
         self.booster_condition = 10
         self.npc_count = 50
         
-        # 스마트폰 내부 통제실 물리 경로 세팅 (factort 오타 -> factory 로 수정)
+        # 스마트폰 내부 통제실 물리 경로 세팅
         self.control_dir = "/sdcard/Download/factory/factory2"
         self.control_path = os.path.join(self.control_dir, "control.txt")
         
@@ -92,7 +92,6 @@ class MasterCoreEngine(FloatLayout):
             self.open_loading_animation()
 
     def open_loading_animation(self):
-        # 텍스트 애니메이션 오류 수정 (Clock 스케줄러 사용)
         self.loading_label = Label(text="🏹         ❤️", font_size='40sp', pos_hint={'x': 0, 'y': 0})
         self.add_widget(self.loading_label)
         
@@ -118,7 +117,6 @@ class MasterCoreEngine(FloatLayout):
                 f.write(f"동전 등장 간격 = {self.coin_interval}\n")
                 f.write(f"고스트 NPC 주행 인원 = {self.npc_count}\n")
         except Exception as e:
-            # 안드로이드 정책상 폴더 생성이 막히면 화면에 표시
             self.status_label.text = f"저장 실패: 권한을 확인하세요.\n{e}"
             return
             
@@ -148,7 +146,6 @@ class MasterCoreEngine(FloatLayout):
 
 class Factory4MasterApp(App):
     def build(self):
-        # 한글 폰트를 Kivy 기본 폰트로 강제 지정 (Tofu 현상 방지)
         font_path = 'font/NanumGothic.ttf'
         if os.path.exists(font_path):
             LabelBase.register(name='Roboto', fn_regular=font_path)
