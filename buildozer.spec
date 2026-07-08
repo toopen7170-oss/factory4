@@ -7,8 +7,8 @@ source.include_exts = py,png,jpg,kv,atlas,txt,mp3,ttf
 source.include_patterns = font/*.ttf
 version = 1.0.0
 
-# 💡 [버그 픽스] python3와 hostpython3의 버전을 3.11로 완벽히 일치시켜 충돌 차단
-requirements = python3==3.11,hostpython3==3.11,kivy==2.3.0,pillow,pyjnius
+# 💡 [최종 버그 픽스] 다운로드 404 에러 방지를 위해 정확한 패치 버전(3.11.9) 명시
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.0,pillow,pyjnius
 
 android.permissions = BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_CONNECT, BLUETOOTH_SCAN, ACCESS_FINE_LOCATION, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
 android.api = 33
