@@ -1,17 +1,16 @@
-import os, time
+import os
+import time
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
-from kivy.uix.slider import Slider
-from kivy.uix.textinput import TextInput
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 from kivy.utils import platform
 
-# 💡 [엔진 최적화] 안드로이드 시스템 내부에서 외국어 글꼴이 깨지는 현상을 방지하기 위한 전역 네임스페이스 명시적 바인딩
+# 💡 [글꼴 다국어 임베딩] 전용 디렉터리 내 자산을 가상 네임스페이스에 동적 등록
 font_files = {
     'ko_font': 'font/korean.ttf',
     'en_font': 'font/global.ttf',
@@ -27,7 +26,6 @@ for font_name, font_path in font_files.items():
 
 if platform == 'android':
     from android.permissions import request_permissions, Permission
-    # 기기 내부 미디어 주크박스 스캔 및 블루투스 케이던스 센서 수신을 위한 하드웨어 권한 획득
     request_permissions([
         Permission.READ_EXTERNAL_STORAGE, 
         Permission.WRITE_EXTERNAL_STORAGE,
@@ -40,23 +38,21 @@ if platform == 'android':
 class MasterCoreEngine(FloatLayout):
     def __init__(self, **kwargs):
         super(MasterCoreEngine, self).__init__(**kwargs)
-        self.secret_tap_count = 0
-        self.last_tap_time = 0
-        self.app_title = "실내 사이클 메타버스"
         
-        # 각 언어 코드별 전역 폰트 식별자 매핑
-        self.font_map = {
-            'ko': 'ko_font' if os.path.exists('font/korean.ttf') else 'Roboto',
-            'en': 'en_font' if os.path.exists('font/global.ttf') else 'Roboto',
-            'zh': 'zh_font' if os.path.exists('font/chinese.ttf') else 'Roboto',
-            'ja': 'ja_font' if os.path.exists('font/japanese.ttf') else 'Roboto',
-            'ar': 'ar_font' if os.path.exists('font/arabic.ttf') else 'Roboto',
-            'th': 'th_font' if os.path.exists('font/thai.ttf') else 'Roboto'
+        # 💡 [고대비 컴포넌트 데이터 테이블] 폰트와 매치되는 완벽한 타겟 다국어 사전 정의
+        self.lang_pack = {
+            'ko': {'title': "실내 사이클 메타버스", 'btn': "언어 변경 테스트 (Tap)", 'font': 'ko_font'},
+            'en': {'title': "Indoor Cycle Metaverse", 'btn': "Language Change Test (Tap)", 'font': 'en_font'},
+            'zh': {'title': "室内自行车元宇宙", 'btn': "语言切换测试 (Tap)", 'font': 'zh_font'},
+            'ja': {'title': "屋内サイクルメタバース", 'btn': "言語変更テスト (Tap)", 'font': 'ja_font'},
+            'ar': {'title': "دورة ميتافيرس الداخلية", 'btn': "اختبار تغيير اللغة (Tap)", 'font': 'ar_font'},
+            'th': {'title': "อินดอร์ ไซเคิล เมตาเวิร์ส", 'btn': "ทดสอบเปลี่ยนภาษา (Tap)", 'font': 'th_font'}
         }
         
+        self.lang_keys = list(self.lang_pack.keys())
         self.current_lang = 'ko'
         
-        # 100% 로컬 프라이버시 보호 장벽 조성을 위한 영구 데이터 저장소 디렉터리 검증
+        # 100% 로컬 데이터 저장소 경로 안정화 가이드라인
         self.control_dir = "/sdcard/Download/factory/factory4"
         if not os.path.exists(self.control_dir):
             try:
@@ -66,24 +62,28 @@ class MasterCoreEngine(FloatLayout):
                 
         self.control_path = os.path.join(self.control_dir, "control.txt")
         
-        # UI 레이아웃 충돌 방어 원칙 수립 (데이터 표시창 고정 분리 벽)
+        # UI 배치 매직 미러 그리드 백본 구조화
         self.main_layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
         
-        # 💡 [프리미엄 UI 개편] 아이보리 바탕 위에 완벽하게 가독성을 보장하는 진하고 선명한 검은색 굵은 글씨 레이어 적용
+        # 초기 언어 데이터 파싱 및 안전 가속 폰트 적용
+        init_data = self.lang_pack[self.current_lang]
+        safe_font = init_data['font'] if os.path.exists(font_files[init_data['font']]) else 'Roboto'
+        
+        # [프리미엄 핏 레이블] 아이보리 캔버스용 선명도 극대화 폰트 레이어
         self.title_label = Label(
-            text=self.app_title, 
+            text=init_data['title'], 
             font_size='34sp', 
-            font_name=self.font_map[self.current_lang], 
+            font_name=safe_font, 
             size_hint=(1, 0.2),
             color=(0, 0, 0, 1),
             bold=True
         )
         self.main_layout.add_widget(self.title_label)
         
-        # 💡 [프리미엄 UI 개편] 기본 어두운 텍스처를 걷어내고 소프트 베이지-아이보리 톤의 버튼 배경과 고대비 굵은 글씨 컴포넌트 이식
+        # [프리미엄 핏 인터랙션 컴포넌트] 고화질 소프트 베이지 버튼 아키텍처
         self.lang_test_btn = Button(
-            text="언어 변경 테스트 (Tap)",
-            font_name=self.font_map['ko'],
+            text=init_data['btn'],
+            font_name=safe_font,
             size_hint=(1, 0.1),
             color=(0, 0, 0, 1),
             bold=True,
@@ -96,26 +96,23 @@ class MasterCoreEngine(FloatLayout):
         self.add_widget(self.main_layout)
 
     def change_language_logic(self, instance):
-        """실시간 무빌드 다국어 리로드 및 폰트 강제 매핑 동기화 시스템"""
-        lang_keys = list(self.font_map.keys())
-        current_idx = lang_keys.index(self.current_lang)
-        next_idx = (current_idx + 1) % len(lang_keys)
-        self.current_lang = lang_keys[next_idx]
+        """실시간 메모리 데이터 캐시 로드 및 동적 리얼타임 다국어 폰트 제어 인젝터"""
+        current_idx = self.lang_keys.index(self.current_lang)
+        next_idx = (current_idx + 1) % len(self.lang_keys)
+        self.current_lang = self.lang_keys[next_idx]
         
-        new_font = self.font_map[self.current_lang]
-        self.title_label.font_name = new_font
-        self.lang_test_btn.font_name = new_font
+        target_data = self.lang_pack[self.current_lang]
         
-        if self.current_lang == 'ko':
-            self.title_label.text = "실내 사이클 메타버스"
-        elif self.current_lang == 'en':
-            self.title_label.text = "Indoor Cycle Metaverse"
-        elif self.current_lang == 'zh':
-            self.title_label.text = "室内自行车元宇宙"
-        elif self.current_lang == 'ja':
-            self.title_label.text = "屋内サイクルメタバース"
-        else:
-            self.title_label.text = f"Language: {self.current_lang}"
+        # 폰트 자산 실시간 유효성 스캔 검증기 활성화
+        font_key = target_data['font']
+        final_font = font_key if os.path.exists(font_files[font_key]) else 'Roboto'
+        
+        # [원자적 업데이트 아키텍처] 텍스트와 전용 매칭 폰트를 완벽한 동시성에 의거해 즉각 교체 (네모 칸 깨짐 차단)
+        self.title_label.text = target_data['title']
+        self.title_label.font_name = final_font
+        
+        self.lang_test_btn.text = target_data['btn']
+        self.lang_test_btn.font_name = final_font
 
 class Factory4MasterApp(App):
     def build(self):
@@ -123,7 +120,7 @@ class Factory4MasterApp(App):
         if os.path.exists(default_font_path):
             LabelBase.register(name='Roboto', fn_regular=default_font_path)
             
-        # 💡 [프리미엄 UI 개편] 눈의 피로감을 차단하고 시인성을 최고 등급으로 끌어올리는 고품격 소프트 아이보리(Ivory) 전면 스크린 도색
+        # 눈의 피로를 최소화하며 명암비를 올리는 프리미엄 무광 소프트 아이보리 스크린 세팅
         Window.clearcolor = (0.98, 0.98, 0.94, 1)
         Window.softinput_mode = 'below_target'
         
