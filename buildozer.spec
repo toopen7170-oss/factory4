@@ -7,8 +7,8 @@ source.include_exts = py,png,jpg,kv,atlas,txt,mp3,ttf
 source.include_patterns = font/*.ttf
 version = 1.0.0
 
-# 💡 [핵심 버그 픽스] Python 3.14 강제 다운로드를 막고 3.11 버전으로 영구 락인
-requirements = python3==3.11,kivy==2.3.0,pillow,pyjnius
+# 💡 [버그 픽스] python3와 hostpython3의 버전을 3.11로 완벽히 일치시켜 충돌 차단
+requirements = python3==3.11,hostpython3==3.11,kivy==2.3.0,pillow,pyjnius
 
 android.permissions = BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_CONNECT, BLUETOOTH_SCAN, ACCESS_FINE_LOCATION, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
 android.api = 33
