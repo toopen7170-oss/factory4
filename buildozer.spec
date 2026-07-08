@@ -21,8 +21,8 @@ source.include_patterns = font/*.ttf
 version = 1.0.0
 
 # (list) Application requirements
-# 💡 핵심 수정: python3와 hostpython3 모두 3.11로 완벽히 고정하여 C-API 충돌 방어
-requirements = python3==3.11,hostpython3==3.11,kivy==2.3.0,pillow,pyjnius
+# 💡 핵심 수정: 404 에러 방지를 위해 파이썬 패치 버전을 3.11.9로 정확하게 명시
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.0,pillow,pyjnius
 
 # (str) Supported orientations
 orientation = landscape
