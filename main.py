@@ -14,7 +14,7 @@ if platform == 'android':
     from android.permissions import request_permissions, Permission
 
 # ---------------------------------------------------------
-# 1. 인프라 경로 설정
+# 1. 인프라 경로 설정 (공장장님 지정 절대 경로 완벽 반영)
 # ---------------------------------------------------------
 if platform == 'android':
     FACTORY_ROOT = '/sdcard/Download/factory'
@@ -50,8 +50,9 @@ class ResourceScannerLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.orientation = 'vertical'
+        self.last_video_count = -1  # 자동 스캔 감지용 변수
         
-        # [AI 방어 전술 1] 폰트가 없는 초기 상태이므로 무조건 '영어'로 출력하여 Tofu(네모) 방지
+        # [초기 화면]
         self.status_label = Label(
             text="[System Booting]\nRequesting Permissions...",
             font_size='18sp',
@@ -73,41 +74,53 @@ class ResourceScannerLayout(BoxLayout):
             self.setup_infrastructure()
 
     def on_permissions_result(self, permissions, grants):
-        if all(grants):
-            self.setup_infrastructure()
-        else:
-            # [AI 방어 전술 2] 권한 거부 시에도 폰트가 없으므로 '영어'로 안내
-            error_msg = "[Error] Permission Denied.\n\n"
-            error_msg += "Please go to Android Settings -> Apps -> MetaRider V1\n"
-            error_msg += "Allow ALL Permissions (Files, Location, Bluetooth)\n"
-            error_msg += "Then restart the app."
-            self.status_label.text = error_msg
-            self.status_label.color = (1, 0.2, 0.2, 1)
+        # [AI 방어 전술 수정] 안드로이드 11 이상 권한 버그 강제 우회
+        # grants 결과를 믿지 않고, 폴더 생성 및 쓰기 테스트를 직접 실행함.
+        self.setup_infrastructure()
 
     def setup_infrastructure(self):
         target_dirs = [FACTORY_ROOT, CORE_DIR, LOG_DIR, MUSIC_DIR, VIDEO_DIR, FONT_DIR]
-        for directory in target_dirs:
-            if not os.path.exists(directory):
-                try:
+        try:
+            # 1. 폴더 생성 시도
+            for directory in target_dirs:
+                if not os.path.exists(directory):
                     os.makedirs(directory)
-                except Exception as e:
-                    self.status_label.text = f"[Error] Cannot create folders.\n{str(e)}"
-                    self.status_label.color = (1, 0.2, 0.2, 1)
-                    return
+                    
+            # 2. 쓰기 권한 실제 확인용 더미 파일 생성 테스트
+            test_file = os.path.join(FACTORY_ROOT, 'permission_test.txt')
+            with open(test_file, 'w') as f:
+                f.write('ok')
+            os.remove(test_file)
+            
+        except Exception as e:
+            # 권한이 진짜 없을 때만 영어+한글 혼용으로 최후의 에러 안내
+            error_msg = "[Error] Storage Permission Denied.\n\n"
+            error_msg += "안드로이드 설정에서 권한이 완전히 허용되지 않았습니다.\n\n"
+            error_msg += "1. 앱 설정 -> 권한 -> '위치', '근처 기기(블루투스)' 허용\n"
+            error_msg += "2. 특별한 접근 -> '모든 파일에 대한 접근' -> MetaRider V1 (허용)\n\n"
+            error_msg += f"Detail: {str(e)}"
+            self.status_label.text = error_msg
+            self.status_label.color = (1, 0.2, 0.2, 1)
+            return
 
-        # 폴더가 정상 생성/접근되면 폰트를 불러옴
+        # 권한 테스트 통과 시 폰트 및 미디어 로드
         self.register_fonts()
-        # 폰트 로드 성공 시 한글 출력 시작
         self.scan_resources()
+        
+        # [신규 기능] 5초마다 백그라운드에서 동영상 폴더 자동 스캔 실행
+        Clock.schedule_interval(self.auto_scan_video, 5)
 
     def register_fonts(self):
         universal_font = os.path.join(FONT_DIR, 'universal.ttf')
+        
+        # 국가별 폰트 매핑
         font_mapping = {
             'AppFont': 'app_font.ttf', 'Chinese': 'chinese.ttf',
             'Japanese': 'japanese.ttf', 'Arabic': 'arabic.ttf',
             'Thai': 'thai.ttf', 'Global': 'global.ttf', 'Korean': 'korean.ttf'
         }
         
+        # 1. 앱 기본 한글 폰트 적용
         primary_font = None
         for fn in ['korean.ttf', 'app_font.ttf', 'global.ttf', 'universal.ttf']:
             chk_path = os.path.join(FONT_DIR, fn)
@@ -119,6 +132,7 @@ class ResourceScannerLayout(BoxLayout):
             LabelBase.register(name=DEFAULT_FONT, fn_regular=primary_font)
             self.status_label.font_name = DEFAULT_FONT
 
+        # 2. 국가별 폰트 각각 적용 (없으면 universal.ttf로 강제 대체)
         for font_name, file_name in font_mapping.items():
             font_path = os.path.join(FONT_DIR, file_name)
             if os.path.exists(font_path):
@@ -128,21 +142,36 @@ class ResourceScannerLayout(BoxLayout):
                     LabelBase.register(name=font_name, fn_regular=universal_font)
 
     def scan_resources(self):
-        # 여기까지 도달했다면 폰트가 성공적으로 로드된 것이므로 '한글' 사용 가능!
         log_text = "[인프라 및 리소스 스캔 완료]\n\n"
         
+        # mp3 음악 스캔
         music_files = glob.glob(os.path.join(MUSIC_DIR, '*.mp3'))
         log_text += f"🎵 국내음악(mp3) 발견: {len(music_files)}개\n"
 
+        # 주행 영상 스캔
         video_files = []
         for ext in ('*.mp4', '*.avi', '*.mkv', '*.mov'):
             video_files.extend(glob.glob(os.path.join(VIDEO_DIR, ext)))
         
-        log_text += f"🎬 주행영상 발견: {len(video_files)}개\n\n"
-        log_text += "[System Ready] 자전거 연동 대기 중..."
+        self.last_video_count = len(video_files)
+        log_text += f"🎬 주행영상 발견: {self.last_video_count}개\n\n"
+        
+        log_text += "[System Ready] 자전거 연동 대기 중...\n"
+        log_text += "(신규 동영상 실시간 자동 스캔 작동 중 ♻️)"
         
         self.status_label.text = log_text
         self.status_label.color = (0.2, 1, 0.2, 1)
+
+    def auto_scan_video(self, dt):
+        # 5초 주기로 비디오 폴더 확인 후 갯수 변동 시 화면 즉시 리프레시
+        video_files = []
+        for ext in ('*.mp4', '*.avi', '*.mkv', '*.mov'):
+            video_files.extend(glob.glob(os.path.join(VIDEO_DIR, ext)))
+        
+        current_count = len(video_files)
+        # 새로운 영상이 들어오거나 지워지면 스캔 재가동
+        if current_count != self.last_video_count:
+            self.scan_resources()
 
 class MetaRiderApp(App):
     def build(self):
