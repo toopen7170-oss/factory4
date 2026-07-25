@@ -1,24 +1,18 @@
-[app]
-title = factory4
-package.name = factory4
-package.domain = com.factory.cycling
-source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,txt,mp3,ttf
-source.include_patterns = font/*.ttf
-version = 1.0.0
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.0,pillow,pyjnius,sqlite3
-orientation = landscape
-fullscreen = 1
+# (주의) buildozer.spec 파일 내에서 해당 항목을 찾아 덮어쓰기 하세요.
 
-# 💡 갤럭시 S26 울트라 환경의 완벽한 하드웨어 접근을 위한 권한 매트릭스 각인
-android.permissions = BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_CONNECT, BLUETOOTH_SCAN, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
+# 앱 기본 정보
+title = MetaRider V1
+package.name = metariderv1
+package.domain = org.factory4
 
+# 핵심 엔진 및 라이브러리 포함 (블루투스와 안드로이드 API 제어용)
+requirements = python3, kivy, android, jnius
+
+# ★ AI 통제선: 안드로이드 필수 권한 요청 (절대 누락 금지)
+# 인터넷(다중접속), 외부저장소(폴더접근), 블루투스(센서접속)
+android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_SCAN, BLUETOOTH_CONNECT, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION
+
+# 안드로이드 최신 API 타겟팅 (Android 11 이상 폴더 접근을 위한 세팅)
 android.api = 33
-android.minapi = 21
-android.ndk = 25b
-android.ndk_api = 21
-android.archs = arm64-v8a
-
-[buildozer]
-log_level = 2
-warn_on_root = 1
+android.minapi = 24
+android.accept_sdk_license = True
