@@ -10,7 +10,7 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,mp4,avi,mkv,mov
 version = 1.0
 
 # 핵심 엔진 및 라이브러리 포함
-requirements = python3, kivy, android, jnius
+requirements = python3, kivy, android, jnius,ffpyplayer
 
 # ★ AI 통제선: 안드로이드 필수 권한 요청 (MANAGE_EXTERNAL_STORAGE 포함)
 android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_SCAN, BLUETOOTH_CONNECT, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION
