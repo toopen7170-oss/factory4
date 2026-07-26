@@ -37,13 +37,13 @@ android.archs = arm64-v8a
 android.allow_backup = True
 
 # ==========================================
-# 💡 [핵심 수정 사항] C컴파일러 오류(ccache) 해결을 위한 설정
+# 💡 [최종 에러 해결 설정]
 # ==========================================
-# 1. C/C++ 컴파일이 가장 안정적으로 지원되는 NDK 25b 버전으로 강제 고정합니다.
+# 1. ccache(컴파일러) 에러를 막기 위해 안정화된 NDK 25b는 계속 유지합니다.
 android.ndk = 25b
 
-# 2. ffmpeg 및 ffpyplayer의 최신 빌드 레시피가 포함된 p4a 개발(develop) 브랜치를 사용합니다.
-p4a.branch = develop
+# 2. IndexError(엔진 버그) 방지를 위해 공식 안정화 버전(master)을 사용합니다.
+p4a.branch = master
 # ==========================================
 
 [buildozer]
