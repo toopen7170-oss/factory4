@@ -20,8 +20,8 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-# FFmpeg 엔진 업데이트 충돌을 막기 위해 ffpyplayer 최신 버전을 강제 지정했습니다.
-requirements = python3,kivy,android,jnius,ffmpeg,ffpyplayer==4.5.0
+# 404 에러 방지를 위해 ffpyplayer 버전 고정을 해제하고 기본 최신 버전을 사용합니다.
+requirements = python3,kivy,android,jnius,ffmpeg,ffpyplayer
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
