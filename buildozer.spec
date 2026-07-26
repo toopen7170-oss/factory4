@@ -13,7 +13,6 @@ package.domain = org.test
 source.dir = .
 
 # (list) Source files to include (exts)
-# 동영상 파일이 앱에 포함될 수 있도록 mp4, avi 등을 추가했습니다.
 source.include_exts = py,png,jpg,kv,atlas,mp4,avi,mkv,wav,mp3
 
 # (str) Application versioning (method 1)
@@ -21,8 +20,8 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-# FFmpeg와 ffpyplayer를 순서대로 추가했습니다.
-requirements = python3,kivy,android,jnius,ffmpeg,ffpyplayer
+# FFmpeg 엔진 업데이트 충돌을 막기 위해 ffpyplayer 최신 버전을 강제 지정했습니다.
+requirements = python3,kivy,android,jnius,ffmpeg,ffpyplayer==4.5.0
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -71,7 +70,6 @@ android.skip_update = False
 android.accept_sdk_license = True
 
 # (str) Android architecture to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
-# 빌드 시간 단축과 최신 스마트폰 호환을 위해 64비트 하나로 고정했습니다.
 android.archs = arm64-v8a
 
 # (bool) enables Android auto backup feature (Android API >=23)
