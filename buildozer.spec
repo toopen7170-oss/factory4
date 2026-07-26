@@ -18,8 +18,10 @@ source.include_exts = py,png,jpg,kv,atlas,mp4,avi,mkv,wav,mp3
 # (str) Application versioning (method 1)
 version = 0.1
 
-# (list) Application requirements (ffpyplayer 오류 해결을 위해 github 최신 버전으로 수정됨)
-requirements = python3,kivy,android,jnius,ffmpeg,https://github.com/matham/ffpyplayer/archive/master.zip
+# (list) Application requirements 
+# 💡 [수정됨] 에러를 유발하고 앱을 무겁게 만드는 ffmpeg, ffpyplayer를 제거했습니다. 
+# Kivy는 안드로이드 네이티브 플레이어를 통해 mp3, mp4를 정상적으로 재생합니다.
+requirements = python3,kivy,android,jnius
 
 # (str) Supported orientations
 orientation = portrait
@@ -37,7 +39,7 @@ android.archs = arm64-v8a
 android.allow_backup = True
 
 # ==========================================
-# 💡 [최종 에러 해결 설정]
+# 💡 [안정화 유지 설정]
 # ==========================================
 # 1. ccache(컴파일러) 에러를 막기 위해 안정화된 NDK 25b는 계속 유지합니다.
 android.ndk = 25b
