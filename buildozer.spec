@@ -18,8 +18,8 @@ source.include_exts = py,png,jpg,kv,atlas,mp4,avi,mkv,wav,mp3
 # (str) Application versioning (method 1)
 version = 0.1
 
-# (list) Application requirements
-requirements = python3,kivy,android,jnius,ffmpeg,ffpyplayer
+# (list) Application requirements (ffpyplayer 오류 해결을 위해 github 최신 버전으로 수정됨)
+requirements = python3,kivy,android,jnius,ffmpeg,https://github.com/matham/ffpyplayer/archive/master.zip
 
 # (str) Supported orientations
 orientation = portrait
