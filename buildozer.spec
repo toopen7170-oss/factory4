@@ -19,64 +19,34 @@ source.include_exts = py,png,jpg,kv,atlas,mp4,avi,mkv,wav,mp3
 version = 0.1
 
 # (list) Application requirements
-# comma separated e.g. requirements = sqlite3,kivy
-# 404 에러 방지를 위해 ffpyplayer 버전 고정을 해제하고 기본 최신 버전을 사용합니다.
 requirements = python3,kivy,android,jnius,ffmpeg,ffpyplayer
 
-# (str) Custom source folders for requirements
-# Sets custom source for any requirements with recipes
-# requirements.source.kivy = ../../kivy
-
-# (str) Presplash of the application
-#presplash.filename = %(source.dir)s/data/presplash.png
-
-# (str) Icon of the application
-#icon.filename = %(source.dir)s/data/icon.png
-
-# (list) Supported orientations
-# Valid options are: landscape, portrait, portrait-reverse or landscape-reverse
+# (str) Supported orientations
 orientation = portrait
 
 #
 # Android specific
 #
-
-# (bool) Indicate if the application should be fullscreen or not
 fullscreen = 1
-
-# (string) Presplash background color (for android toolchain)
-# Supported formats are: #RRGGBB #AARRGGBB or one of the following names:
-# red, blue, green, black, white, gray, cyan, magenta, yellow, lightgray,
-# darkgray, grey, lightgrey, darkgrey, aqua, fuchsia, lime, maroon, navy,
-# olive, purple, silver, teal.
-#android.presplash_color = #FFFFFF
-
-# (list) Permissions
 android.permissions = INTERNET
-
-# (int) Target Android API, should be as high as possible.
 android.api = 33
-
-# (int) Minimum API your APK / AAB will support.
 android.minapi = 24
-
-# (bool) If True, then skip trying to update the Android sdk
-# This can be useful to avoid excess Internet downloads or save time
-# when an update is due and you just want to test/build your package
 android.skip_update = False
-
-# (bool) If True, then automatically accept SDK license
-# used by the android sdk updater
 android.accept_sdk_license = True
-
-# (str) Android architecture to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
 android.archs = arm64-v8a
-
-# (bool) enables Android auto backup feature (Android API >=23)
 android.allow_backup = True
 
-[buildozer]
+# ==========================================
+# 💡 [핵심 수정 사항] C컴파일러 오류(ccache) 해결을 위한 설정
+# ==========================================
+# 1. C/C++ 컴파일이 가장 안정적으로 지원되는 NDK 25b 버전으로 강제 고정합니다.
+android.ndk = 25b
 
+# 2. ffmpeg 및 ffpyplayer의 최신 빌드 레시피가 포함된 p4a 개발(develop) 브랜치를 사용합니다.
+p4a.branch = develop
+# ==========================================
+
+[buildozer]
 # (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
 log_level = 2
 
