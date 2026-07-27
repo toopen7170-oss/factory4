@@ -9,6 +9,9 @@ package.name = metariderv1
 # (str) Package domain (needed for android packaging)
 package.domain = org.kivy
 
+# (str) Source code where the main.py live (누락되었던 핵심 코드 추가)
+source.dir = .
+
 # (list) Source files to include (let it empty to include all files)
 source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,mp4,avi,mkv,mov,bin,txt
 
