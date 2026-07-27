@@ -5,17 +5,20 @@ import glob
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.video import Video
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.popup import Popup
+from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.clock import Clock, mainthread
 from kivy.utils import platform
 from kivy.core.text import LabelBase
 
 # ---------------------------------------------------------
-# 1. 경로 설정 (정확한 기기 내장 메모리 경로 반영)
+# 1. 경로 설정
 # ---------------------------------------------------------
 if platform == 'android':
     FACTORY_ROOT = '/sdcard/Download/factory'
@@ -29,7 +32,7 @@ VIDEO_DIR = os.path.join(CORE_DIR, 'video')
 FONT_DIR = os.path.join(CORE_DIR, 'font')
 
 # ---------------------------------------------------------
-# 2. 블랙박스 (오류 로그 자동 저장 - 지정된 경로)
+# 2. 블랙박스 (오류 로그 자동 저장)
 # ---------------------------------------------------------
 def global_exception_handler(exctype, value, tb):
     error_msg = "".join(traceback.format_exception(exctype, value, tb))
@@ -38,97 +41,53 @@ def global_exception_handler(exctype, value, tb):
         log_file = os.path.join(LOG_DIR, 'crash_log.txt')
         with open(log_file, 'a', encoding='utf-8') as f:
             f.write(error_msg + "\n" + "="*50 + "\n")
-    except: 
-        pass
+    except: pass
     sys.__excepthook__(exctype, value, tb)
-
 sys.excepthook = global_exception_handler
 
 # ---------------------------------------------------------
-# 3. 폰트 등록 시스템 (다국어 & Universal 폴백)
+# 3. 폰트 시스템
 # ---------------------------------------------------------
 def is_valid_font(path):
-    """폰트 파일이 실제로 존재하고 깨지지 않았는지(최소 1KB 이상) 확인"""
-    try:
-        return os.path.exists(path) and os.path.getsize(path) > 1024
-    except:
-        return False
+    try: return os.path.exists(path) and os.path.getsize(path) > 1024
+    except: return False
 
 def register_external_fonts():
-    try:
-        os.makedirs(FONT_DIR, exist_ok=True)
+    try: os.makedirs(FONT_DIR, exist_ok=True)
     except: pass
-    
     universal_font = os.path.join(FONT_DIR, 'universal.ttf')
     has_universal = is_valid_font(universal_font)
-
-    # 요청하신 다국어 폰트 매핑
     font_mapping = {
-        'AppFont': 'app_font.ttf', 
-        'Chinese': 'chinese.ttf',
-        'Japanese': 'japanese.ttf', 
-        'Arabic': 'arabic.ttf',
-        'Thai': 'thai.ttf', 
-        'Global': 'global.ttf', 
-        'Korean': 'korean.ttf',
-        'Universal': 'universal.ttf'
+        'AppFont': 'app_font.ttf', 'Chinese': 'chinese.ttf', 'Japanese': 'japanese.ttf', 
+        'Arabic': 'arabic.ttf', 'Thai': 'thai.ttf', 'Global': 'global.ttf', 
+        'Korean': 'korean.ttf', 'Universal': 'universal.ttf'
     }
-
     for font_name, file_name in font_mapping.items():
         font_path = os.path.join(FONT_DIR, file_name)
-        
-        if is_valid_font(font_path):
-            LabelBase.register(name=font_name, fn_regular=font_path)
-        elif has_universal:
-            # 해당 국가 폰트가 없으면 universal.ttf를 적용
-            LabelBase.register(name=font_name, fn_regular=universal_font)
+        if is_valid_font(font_path): LabelBase.register(name=font_name, fn_regular=font_path)
+        elif has_universal: LabelBase.register(name=font_name, fn_regular=universal_font)
 
 def get_safe_font():
-    # Kivy가 기본적으로 제공하는 폰트(Roboto)를 최후의 방어막으로 사용
     if is_valid_font(os.path.join(FONT_DIR, 'korean.ttf')): return 'Korean'
     if is_valid_font(os.path.join(FONT_DIR, 'universal.ttf')): return 'Universal'
     return 'Roboto'
 
 # ---------------------------------------------------------
-# 4. 안드로이드 블루투스 및 미디어 리스너 (JNI)
+# 4. 앱 전역 데이터 관리자 (음악/비디오 상태 공유)
 # ---------------------------------------------------------
+class MediaManager:
+    video_files = []
+    music_files = []
+    selected_music_paths = set()
+    audio_player = None
+    play_queue = []
+    current_play_index = 0
+    is_music_playing = False
+
+# 안드로이드 음악 종료 리스너 (JNI)
 if platform == 'android':
     try:
         from jnius import autoclass, PythonJavaClass, java_method
-        
-        class BLEScanCallback(PythonJavaClass):
-            __javainterfaces__ = ['android/bluetooth/BluetoothAdapter$LeScanCallback']
-            __javacontext__ = 'app'
-            def __init__(self, on_device_found, **kwargs):
-                super().__init__(**kwargs)
-                self.on_device_found = on_device_found
-            @java_method('(Landroid/bluetooth/BluetoothDevice;I[B)V')
-            def onLeScan(self, device, rssi, scanRecord):
-                name = device.getName()
-                address = device.getAddress()
-                if name: self.on_device_found(name, address)
-
-        class BLEGattCallback(PythonJavaClass):
-            __javainterfaces__ = ['android/bluetooth/BluetoothGattCallback']
-            __javacontext__ = 'app'
-            def __init__(self, app_logic, **kwargs):
-                super().__init__(**kwargs)
-                self.app_logic = app_logic
-            @java_method('(Landroid/bluetooth/BluetoothGatt;II)V')
-            def onConnectionStateChange(self, gatt, status, newState):
-                if newState == 2: self.app_logic.on_gatt_connected(gatt)
-                elif newState == 0: self.app_logic.on_gatt_disconnected()
-            @java_method('(Landroid/bluetooth/BluetoothGatt;I)V')
-            def onServicesDiscovered(self, gatt, status):
-                if status == 0: self.app_logic.on_services_discovered(gatt)
-            @java_method('(Landroid/bluetooth/BluetoothGatt;Landroid/bluetooth/BluetoothGattCharacteristic;)V')
-            def onCharacteristicChanged(self, gatt, characteristic):
-                value = characteristic.getValue()
-                self.app_logic.on_data_received(value)
-            @java_method('(Landroid/bluetooth/BluetoothGatt;Landroid/bluetooth/BluetoothGattDescriptor;I)V')
-            def onDescriptorWrite(self, gatt, descriptor, status):
-                pass
-                
         class MusicCompletionListener(PythonJavaClass):
             __javainterfaces__ = ['android/media/MediaPlayer$OnCompletionListener']
             __javacontext__ = 'app'
@@ -137,118 +96,64 @@ if platform == 'android':
                 self.callback = callback
             @java_method('(Landroid/media/MediaPlayer;)V')
             def onCompletion(self, mp):
-                from kivy.clock import Clock
                 Clock.schedule_once(lambda dt: self.callback(), 0)
-    except Exception:
-        pass
+    except: pass
 
 # ---------------------------------------------------------
-# 5. 메인 앱 화면 및 통제 로직 (UI)
+# 5. 각 화면(Screen) 클래스 설계
 # ---------------------------------------------------------
-class MetaRiderMainLayout(BoxLayout):
+
+class MainMenuScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.orientation = 'vertical'
-        self.padding = 20
-        self.spacing = 10
-        self.found_devices = {}
+        self.safe_font = get_safe_font()
+        layout = BoxLayout(orientation='vertical', padding=40, spacing=15)
         
-        self.music_files = []
-        self.video_files = []
-        self.selected_music_paths = set() 
-        
-        self.prev_crank_rev = -1
-        self.prev_crank_time = -1
-        
-        self.audio_player = None
-        self.is_music_playing = False
-        self.play_queue = []
-        self.current_play_index = 0
-        
-        safe_font = get_safe_font()
-        
-        self.status_label = Label(
-            text="[시스템 부팅 완료] 환경 설정 및 미디어 스캔 정상.",
-            font_name=safe_font, font_size='16sp', halign='center', valign='middle', size_hint_y=0.15
-        )
-        self.status_label.bind(size=self.status_label.setter('text_size'))
-        self.add_widget(self.status_label)
+        title = Label(text="MetaRider 메인 시스템", font_name=self.safe_font, font_size='35sp', size_hint_y=0.2)
+        layout.add_widget(title)
 
-        self.media_layout = GridLayout(cols=2, size_hint_y=0.1, spacing=10)
-        self.music_btn = Button(text="[음악] 목록 열기", font_name=safe_font, background_color=(0.2, 0.8, 0.2, 1))
+        # 음악 재생 버튼 (복구됨)
+        self.music_btn = Button(text="[배경 음악] 리스트 열기", font_name=self.safe_font, background_color=(0.2, 0.8, 0.2, 1), size_hint_y=0.15)
         self.music_btn.bind(on_press=self.open_music_popup)
-        self.media_layout.add_widget(self.music_btn)
-        
-        self.video_btn = Button(text="[영상] 목록 열기", font_name=safe_font, background_color=(0.8, 0.2, 0.2, 1))
-        self.video_btn.bind(on_press=self.open_video_popup)
-        self.media_layout.add_widget(self.video_btn)
-        self.add_widget(self.media_layout)
+        layout.add_widget(self.music_btn)
 
-        self.rpm_label = Label(text="RPM: 0", font_name=safe_font, font_size='60sp', color=(0, 1, 1, 1), bold=True, size_hint_y=0.3)
-        self.add_widget(self.rpm_label)
-        
-        self.scroll_view = ScrollView(size_hint_y=0.3)
-        self.device_list_layout = GridLayout(cols=1, spacing=10, size_hint_y=None)
-        self.device_list_layout.bind(minimum_height=self.device_list_layout.setter('height'))
-        self.scroll_view.add_widget(self.device_list_layout)
-        self.add_widget(self.scroll_view)
-        
-        self.scan_btn = Button(
-            text="블루투스 기기 찾기", font_name=safe_font, size_hint_y=0.15, background_color=(0.2, 0.6, 1, 1),
-            halign='center', valign='middle'
-        )
-        self.scan_btn.bind(size=self.scan_btn.setter('text_size'))
-        self.scan_btn.bind(on_press=self.toggle_scan)
-        self.add_widget(self.scan_btn)
+        btn_1p = Button(text="1인 모드 (주행/경주/타임어택)", font_name=self.safe_font, background_color=(0.2, 0.6, 1, 1))
+        btn_1p.bind(on_press=self.go_single_player)
+        layout.add_widget(btn_1p)
 
-        Clock.schedule_once(self.start_initialization, 1)
+        btn_2p = Button(text="2인 모드 (화면 분할 듀얼 주행)", font_name=self.safe_font, background_color=(1, 0.5, 0.2, 1))
+        btn_2p.bind(on_press=self.go_multi_player)
+        layout.add_widget(btn_2p)
+        
+        self.status_label = Label(text="미디어 스캔 중...", font_name=self.safe_font, size_hint_y=0.1)
+        layout.add_widget(self.status_label)
+        self.add_widget(layout)
+        
+        Clock.schedule_interval(self.scan_media, 30.0)
+        Clock.schedule_once(self.scan_media, 1)
 
-    def start_initialization(self, dt):
-        target_dirs = [FACTORY_ROOT, CORE_DIR, LOG_DIR, MUSIC_DIR, VIDEO_DIR, FONT_DIR]
+    def scan_media(self, dt):
         try:
-            for directory in target_dirs: os.makedirs(directory, exist_ok=True)
-            self.status_label.color = (0.2, 1, 0.2, 1)
-        except Exception as e:
-            self.status_label.text = f"[경고] 파일 생성 실패: {e}"
-            self.status_label.color = (1, 0.5, 0.2, 1)
-
-        # 요청하신 대로 30초마다 음악/비디오 폴더를 스캔하여 자동 업데이트
-        Clock.schedule_interval(self.scan_media_files, 30.0) 
-        self.scan_media_files(0)
-
-    def scan_media_files(self, dt=0):
-        try:
-            # 음악 스캔
+            if os.path.exists(VIDEO_DIR):
+                MediaManager.video_files = glob.glob(os.path.join(VIDEO_DIR, '*.mp4')) + glob.glob(os.path.join(VIDEO_DIR, '*.avi')) + glob.glob(os.path.join(VIDEO_DIR, '*.mkv'))
             if os.path.exists(MUSIC_DIR):
                 new_music = glob.glob(os.path.join(MUSIC_DIR, '*.mp3'))
                 for m in new_music:
-                    if m not in self.music_files: self.selected_music_paths.add(m)
-                self.music_files = new_music
-            
-            # 비디오 스캔 (새로운 동영상이 올라오면 자동 스캔)
-            if os.path.exists(VIDEO_DIR):
-                v_exts = ('*.mp4', '*.avi', '*.mkv', '*.mov')
-                self.video_files = []
-                for ext in v_exts: self.video_files.extend(glob.glob(os.path.join(VIDEO_DIR, ext)))
-            
-            # 버튼 UI 업데이트
-            if not self.is_music_playing:
-                self.music_btn.text = f"[음악] 목록 열기 ({len(self.music_files)}곡)"
-            self.video_btn.text = f"[영상] 목록 열기 ({len(self.video_files)}개)"
-        except Exception: pass
+                    if m not in MediaManager.music_files: MediaManager.selected_music_paths.add(m)
+                MediaManager.music_files = new_music
+                
+            if not MediaManager.is_music_playing:
+                self.music_btn.text = f"[배경 음악] 리스트 열기 ({len(MediaManager.music_files)}곡)"
+            self.status_label.text = f"비디오 {len(MediaManager.video_files)}개 | 음악 {len(MediaManager.music_files)}곡 로드 완료"
+        except: pass
 
+    # --- 음악 관련 로직 부활 ---
     def open_music_popup(self, instance):
-        safe_font = get_safe_font()
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        
         top_bar = BoxLayout(size_hint_y=0.15, spacing=5)
-        btn_sel_all = Button(text="전체선택", font_name=safe_font, font_size='14sp', background_color=(0.4, 0.4, 0.4, 1))
-        btn_desel_all = Button(text="선택해제", font_name=safe_font, font_size='14sp', background_color=(0.4, 0.4, 0.4, 1))
-        btn_play = Button(text="선택 재생", font_name=safe_font, font_size='14sp', background_color=(0.2, 0.8, 0.2, 1))
-        btn_stop = Button(text="정지", font_name=safe_font, font_size='14sp', background_color=(1, 0.5, 0, 1))
+        btn_play = Button(text="선택 재생", font_name=self.safe_font, background_color=(0.2, 0.8, 0.2, 1))
+        btn_stop = Button(text="정지", font_name=self.safe_font, background_color=(1, 0.5, 0, 1))
         
-        top_bar.add_widget(btn_sel_all)
-        top_bar.add_widget(btn_desel_all)
         top_bar.add_widget(btn_play)
         top_bar.add_widget(btn_stop)
         content.add_widget(top_bar)
@@ -258,13 +163,10 @@ class MetaRiderMainLayout(BoxLayout):
         list_layout.bind(minimum_height=list_layout.setter('height'))
         
         self.checkbox_refs = {} 
-        for m_path in self.music_files:
+        for m_path in MediaManager.music_files:
             row = BoxLayout(size_hint_y=None, height=70, padding=5)
-            cb = CheckBox(size_hint_x=0.15, active=(m_path in self.selected_music_paths))
-            lbl = Label(
-                text=os.path.basename(m_path), font_name=safe_font, size_hint_x=0.85, halign='left', valign='middle',
-                shorten=True, shorten_from='right'
-            )
+            cb = CheckBox(size_hint_x=0.15, active=(m_path in MediaManager.selected_music_paths))
+            lbl = Label(text=os.path.basename(m_path), font_name=self.safe_font, size_hint_x=0.85, halign='left', shorten=True, shorten_from='right')
             lbl.bind(size=lbl.setter('text_size'))
             row.add_widget(cb)
             row.add_widget(lbl)
@@ -273,238 +175,159 @@ class MetaRiderMainLayout(BoxLayout):
             
         scroll.add_widget(list_layout)
         content.add_widget(scroll)
-        popup = Popup(title="음악 플레이리스트", title_font=safe_font, content=content, size_hint=(0.95, 0.9))
+        popup = Popup(title="음악 플레이리스트", title_font=self.safe_font, content=content, size_hint=(0.95, 0.9))
         
-        btn_sel_all.bind(on_press=lambda x: self.toggle_all_music(True))
-        btn_desel_all.bind(on_press=lambda x: self.toggle_all_music(False))
-        btn_play.bind(on_press=lambda x: [self.update_selected_music(), self.start_playlist(), popup.dismiss()])
+        btn_play.bind(on_press=lambda x: [self.start_playlist(), popup.dismiss()])
         btn_stop.bind(on_press=lambda x: [self.stop_music(), popup.dismiss()])
         popup.open()
 
-    def toggle_all_music(self, state):
-        for cb in self.checkbox_refs.values(): cb.active = state
-
-    def update_selected_music(self):
-        self.selected_music_paths.clear()
-        for m_path, cb in self.checkbox_refs.items():
-            if cb.active: self.selected_music_paths.add(m_path)
-
     def start_playlist(self):
-        if not self.selected_music_paths: return
-        self.play_queue = [m for m in self.music_files if m in self.selected_music_paths]
-        self.current_play_index = 0
+        MediaManager.selected_music_paths.clear()
+        for m_path, cb in self.checkbox_refs.items():
+            if cb.active: MediaManager.selected_music_paths.add(m_path)
+            
+        if not MediaManager.selected_music_paths: return
+        MediaManager.play_queue = [m for m in MediaManager.music_files if m in MediaManager.selected_music_paths]
+        MediaManager.current_play_index = 0
         self.play_next_song()
 
     def play_next_song(self):
         if platform != 'android': return
-        if self.current_play_index >= len(self.play_queue):
+        if MediaManager.current_play_index >= len(MediaManager.play_queue):
             self.stop_music() 
             return
             
-        next_song = self.play_queue[self.current_play_index]
-        self.current_play_index += 1
+        next_song = MediaManager.play_queue[MediaManager.current_play_index]
+        MediaManager.current_play_index += 1
         
         try:
             from jnius import autoclass
             MediaPlayer = autoclass('android.media.MediaPlayer')
-            if self.audio_player:
-                self.audio_player.stop()
-                self.audio_player.release()
-            self.audio_player = MediaPlayer()
-            self.audio_player.setDataSource(next_song)
+            if MediaManager.audio_player:
+                MediaManager.audio_player.stop()
+                MediaManager.audio_player.release()
+            MediaManager.audio_player = MediaPlayer()
+            MediaManager.audio_player.setDataSource(next_song)
             if not hasattr(self, 'completion_listener'):
                 self.completion_listener = MusicCompletionListener(self.play_next_song)
-            self.audio_player.setOnCompletionListener(self.completion_listener)
-            self.audio_player.prepare()
-            self.audio_player.start()
+            MediaManager.audio_player.setOnCompletionListener(self.completion_listener)
+            MediaManager.audio_player.prepare()
+            MediaManager.audio_player.start()
             
-            self.is_music_playing = True
-            self.music_btn.text = f"재생중: {os.path.basename(next_song)[:10]}..."
+            MediaManager.is_music_playing = True
+            self.music_btn.text = f"재생중: {os.path.basename(next_song)[:15]}..."
             self.music_btn.background_color = (1, 0.5, 0, 1)
         except Exception as e:
             self.status_label.text = f"[음악 오류] {str(e)}"
             self.play_next_song() 
 
     def stop_music(self):
-        if self.audio_player:
+        if MediaManager.audio_player:
             try:
-                self.audio_player.stop()
-                self.audio_player.release()
+                MediaManager.audio_player.stop()
+                MediaManager.audio_player.release()
             except: pass
-        self.audio_player = None
-        self.is_music_playing = False
-        self.music_btn.text = f"[음악] 목록 열기 ({len(self.music_files)}곡)"
+        MediaManager.audio_player = None
+        MediaManager.is_music_playing = False
+        self.music_btn.text = f"[배경 음악] 리스트 열기 ({len(MediaManager.music_files)}곡)"
         self.music_btn.background_color = (0.2, 0.8, 0.2, 1)
+    # ---------------------------
 
-    def open_video_popup(self, instance):
+    def go_single_player(self, instance):
+        self.manager.current = 'single_player'
+
+    def go_multi_player(self, instance):
+        self.manager.current = 'multi_player'
+
+class SinglePlayerScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20)
         safe_font = get_safe_font()
-        content = BoxLayout(orientation='vertical', padding=10)
-        scroll = ScrollView(size_hint_y=1.0)
-        list_layout = GridLayout(cols=1, size_hint_y=None, spacing=10)
+        layout.add_widget(Label(text="[ 1인 모드 대기실 ]", font_name=safe_font, font_size='24sp', size_hint_y=0.2))
+        btn_back = Button(text="메인으로 돌아가기", font_name=safe_font, size_hint_y=0.1)
+        btn_back.bind(on_press=lambda x: setattr(self.manager, 'current', 'main_menu'))
+        layout.add_widget(btn_back)
+        self.add_widget(layout)
+
+class MultiPlayerScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.safe_font = get_safe_font()
+        self.main_layout = BoxLayout(orientation='vertical')
+        
+        top_bar = BoxLayout(size_hint_y=0.1)
+        btn_select_video = Button(text="동영상 선택", font_name=self.safe_font, background_color=(0.2, 0.8, 0.2, 1))
+        btn_select_video.bind(on_press=self.open_video_list)
+        btn_back = Button(text="뒤로", font_name=self.safe_font, size_hint_x=0.3)
+        btn_back.bind(on_press=lambda x: self.cleanup_and_go_back())
+        top_bar.add_widget(btn_select_video)
+        top_bar.add_widget(btn_back)
+        self.main_layout.add_widget(top_bar)
+        
+        self.split_layout = BoxLayout(orientation='horizontal', size_hint_y=0.9, spacing=5)
+        
+        self.p1_layout = FloatLayout()
+        self.p1_label = Label(text="Player 1 대기중...", font_name=self.safe_font, pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        self.p1_video = None
+        self.p1_layout.add_widget(self.p1_label)
+        self.split_layout.add_widget(self.p1_layout)
+        
+        self.p2_layout = FloatLayout()
+        self.p2_label = Label(text="Player 2 대기중...", font_name=self.safe_font, pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        self.p2_video = None
+        self.p2_layout.add_widget(self.p2_label)
+        self.split_layout.add_widget(self.p2_layout)
+
+        self.main_layout.add_widget(self.split_layout)
+        self.add_widget(self.main_layout)
+
+    def open_video_list(self, instance):
+        content = BoxLayout(orientation='vertical')
+        scroll = ScrollView()
+        list_layout = GridLayout(cols=1, size_hint_y=None, spacing=5)
         list_layout.bind(minimum_height=list_layout.setter('height'))
         
-        for v_path in self.video_files:
-            btn = Button(
-                text=f"{os.path.basename(v_path)}", font_name=safe_font, size_hint_y=None, height=80,
-                halign='left', valign='middle', padding=(20, 0), shorten=True, shorten_from='right'
-            )
-            btn.bind(size=btn.setter('text_size'))
-            btn.bind(on_press=lambda x, path=v_path: [self.play_specific_video(path)])
+        for v_path in MediaManager.video_files:
+            btn = Button(text=os.path.basename(v_path), font_name=self.safe_font, size_hint_y=None, height=80)
+            btn.bind(on_press=lambda x, path=v_path: [self.start_split_video(path), self.popup.dismiss()])
             list_layout.add_widget(btn)
             
         scroll.add_widget(list_layout)
         content.add_widget(scroll)
-        popup = Popup(title="영상 선택 (터치 시 외부 앱으로 팝업 재생)", title_font=safe_font, content=content, size_hint=(0.95, 0.9))
-        popup.open()
+        self.popup = Popup(title="2인용 영상 선택", title_font=self.safe_font, content=content, size_hint=(0.9, 0.9))
+        self.popup.open()
 
-    def play_specific_video(self, video_path):
-        if platform == 'android':
-            try:
-                from jnius import autoclass
-                StrictMode = autoclass('android.os.StrictMode')
-                VmPolicyBuilder = autoclass('android.os.StrictMode$VmPolicy$Builder')
-                StrictMode.setVmPolicy(VmPolicyBuilder().build())
+    def start_split_video(self, video_path):
+        self.p1_layout.clear_widgets()
+        self.p2_layout.clear_widgets()
+        
+        # options={'allow_stretch': True} 를 추가하여 비디오가 분할 화면에 맞게 늘어나도록 설정
+        self.p1_video = Video(source=video_path, state='play', options={'eos': 'loop', 'allow_stretch': True})
+        self.p2_video = Video(source=video_path, state='play', options={'eos': 'loop', 'allow_stretch': True})
+        
+        p1_overlay = Label(text="P1 (RPM: 0)", font_name=self.safe_font, color=(1,0,0,1), pos_hint={'top': 1, 'x': 0}, size_hint=(1, 0.1))
+        p2_overlay = Label(text="P2 (RPM: 0)", font_name=self.safe_font, color=(0,0,1,1), pos_hint={'top': 1, 'x': 0}, size_hint=(1, 0.1))
+        
+        self.p1_layout.add_widget(self.p1_video)
+        self.p1_layout.add_widget(p1_overlay)
+        self.p2_layout.add_widget(self.p2_video)
+        self.p2_layout.add_widget(p2_overlay)
 
-                Intent = autoclass('android.content.Intent')
-                Uri = autoclass('android.net.Uri')
-                File = autoclass('java.io.File')
-                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    def cleanup_and_go_back(self):
+        if self.p1_video: self.p1_video.state = 'stop'
+        if self.p2_video: self.p2_video.state = 'stop'
+        self.manager.current = 'main_menu'
 
-                intent = Intent(Intent.ACTION_VIEW)
-                file = File(video_path)
-                uri = Uri.fromFile(file)
-                intent.setDataAndType(uri, "video/*")
-                PythonActivity.mActivity.startActivity(intent)
-            except Exception as e:
-                self.status_label.text = f"[영상 실행 오류] {str(e)}"
-
-    def toggle_scan(self, instance):
-        if platform != 'android': return
-        if "시작" in self.scan_btn.text or "기기 찾기" in self.scan_btn.text: self.start_ble_scan()
-        else: self.stop_ble_scan()
-
-    def start_ble_scan(self):
-        try:
-            from jnius import autoclass
-            BluetoothAdapter = autoclass('android.bluetooth.BluetoothAdapter')
-            self.bluetooth_adapter = BluetoothAdapter.getDefaultAdapter()
-            if not self.bluetooth_adapter or not self.bluetooth_adapter.isEnabled():
-                self.status_label.text = "[경고] 스마트폰 블루투스를 켜주세요."
-                self.status_label.color = (1, 0.8, 0.2, 1)
-                return
-            self.found_devices.clear()
-            self.device_list_layout.clear_widgets()
-            self.scan_callback = BLEScanCallback(self.on_device_discovered)
-            self.bluetooth_adapter.startLeScan(self.scan_callback)
-            self.scan_btn.text = "스캔 중지"
-            self.scan_btn.background_color = (1, 0.2, 0.2, 1)
-            self.status_label.text = "센서를 찾는 중입니다...\n(페달을 돌려 센서를 깨워주세요)"
-        except Exception as e:
-            self.status_label.text = f"[스캔 오류] {str(e)}"
-
-    def stop_ble_scan(self):
-        try:
-            if hasattr(self, 'bluetooth_adapter') and hasattr(self, 'scan_callback'):
-                self.bluetooth_adapter.stopLeScan(self.scan_callback)
-            self.scan_btn.text = "블루투스 기기 찾기 (스캔 시작)"
-            self.scan_btn.background_color = (0.2, 0.6, 1, 1)
-        except Exception: pass
-
-    @mainthread
-    def on_device_discovered(self, name, address):
-        if address not in self.found_devices:
-            self.found_devices[address] = name
-            safe_font = get_safe_font()
-            btn = Button(
-                text=f"{name}\n({address})", font_name=safe_font, size_hint_y=None, height=120,
-                background_color=(0.3, 0.3, 0.3, 1)
-            )
-            btn.bind(on_press=lambda x: self.connect_device(name, address))
-            self.device_list_layout.add_widget(btn)
-
-    def connect_device(self, name, address):
-        self.stop_ble_scan()
-        self.status_label.text = f"[{name}] 연결 시도 중..."
-        self.status_label.color = (1, 1, 1, 1)
-        try:
-            from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            device = self.bluetooth_adapter.getRemoteDevice(address)
-            self.gatt_callback = BLEGattCallback(self)
-            self.gatt = device.connectGatt(PythonActivity.mActivity, False, self.gatt_callback)
-        except Exception as e:
-            self.status_label.text = f"[연결 오류] {str(e)}"
-
-    @mainthread
-    def on_gatt_connected(self, gatt):
-        self.status_label.text = "센서와 연결 성공! 데이터를 탐색합니다."
-        self.status_label.color = (0.2, 1, 0.2, 1)
-        gatt.discoverServices()
-
-    @mainthread
-    def on_gatt_disconnected(self):
-        self.status_label.text = "센서 연결이 끊어졌습니다."
-        self.status_label.color = (1, 0.2, 0.2, 1)
-        self.rpm_label.text = "RPM: 0"
-
-    @mainthread
-    def on_services_discovered(self, gatt):
-        try:
-            from jnius import autoclass
-            UUID = autoclass('java.util.UUID')
-            service_uuid = UUID.fromString("00001816-0000-1000-8000-00805f9b34fb")
-            service = gatt.getService(service_uuid)
-            
-            if service:
-                char_uuid = UUID.fromString("00002a5b-0000-1000-8000-00805f9b34fb")
-                characteristic = service.getCharacteristic(char_uuid)
-                gatt.setCharacteristicNotification(characteristic, True)
-                
-                desc_uuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-                descriptor = characteristic.getDescriptor(desc_uuid)
-                BluetoothGattDescriptor = autoclass('android.bluetooth.BluetoothGattDescriptor')
-                descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                gatt.writeDescriptor(descriptor)
-                self.status_label.text = "데이터 수신 채널 오픈! 페달을 굴려주세요."
-        except Exception as e:
-            self.status_label.text = f"[데이터 연결 오류] {str(e)}"
-
-    @mainthread
-    def on_data_received(self, value):
-        try:
-            flags = value[0] & 0xFF
-            has_crank = flags & 0x02
-            offset = 1 + (6 if (flags & 0x01) else 0)
-                
-            if has_crank and len(value) >= offset + 4:
-                crank_rev = (value[offset] & 0xFF) | ((value[offset+1] & 0xFF) << 8)
-                crank_time = (value[offset+2] & 0xFF) | ((value[offset+3] & 0xFF) << 8)
-                
-                if self.prev_crank_rev != -1:
-                    diff_rev = (crank_rev - self.prev_crank_rev) & 0xFFFF
-                    diff_time = (crank_time - self.prev_crank_time) & 0xFFFF
-                    
-                    if diff_time > 0:
-                        rpm = (diff_rev / (diff_time / 1024.0)) * 60.0
-                        self.rpm_label.text = f"RPM: {int(rpm)}"
-                        
-                self.prev_crank_rev = crank_rev
-                self.prev_crank_time = crank_time
-        except: pass
 
 # ---------------------------------------------------------
-# 6. 메인 앱 진입점 및 권한 통제 시스템 (Android 11 완벽 대응)
+# 6. 메인 부팅 / 권한 시스템
 # ---------------------------------------------------------
 class MetaRiderApp(App):
     def build(self):
-        self.root_layout = BoxLayout(orientation='vertical', padding=50)
-        self.boot_label = Label(
-            text="System Booting...\nChecking Permissions...", 
-            font_size='20sp', 
-            halign='center'
-        )
+        self.root_layout = BoxLayout(orientation='vertical')
+        self.boot_label = Label(text="System Booting...\nChecking Permissions...", font_size='20sp', halign='center')
         self.root_layout.add_widget(self.boot_label)
-        
         Clock.schedule_once(self.check_permissions, 0.5)
         return self.root_layout
 
@@ -513,67 +336,50 @@ class MetaRiderApp(App):
             try:
                 from jnius import autoclass
                 from android.permissions import request_permissions, Permission
-                
                 VERSION = autoclass('android.os.Build$VERSION')
                 
-                # Android 11 (API 30) 이상: '모든 파일에 대한 접근' 특별 권한 요청
                 if VERSION.SDK_INT >= 30:
                     Environment = autoclass('android.os.Environment')
-                    
                     if not Environment.isExternalStorageManager():
                         Intent = autoclass('android.content.Intent')
                         Settings = autoclass('android.provider.Settings')
                         Uri = autoclass('android.net.Uri')
                         PythonActivity = autoclass('org.kivy.android.PythonActivity')
                         
-                        # 권한 설정 화면으로 이동
                         intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
                         uri = Uri.parse("package:" + PythonActivity.mActivity.getPackageName())
                         intent.setData(uri)
                         PythonActivity.mActivity.startActivity(intent)
                         
-                        self.boot_label.text = "Please allow 'All Files Access' in settings.\n(설정에서 모든 파일 접근 권한을 허용해주세요)"
-                        
-                        # 권한을 승인할 때까지 반복해서 체크
+                        self.boot_label.text = "Please allow 'All Files Access' in settings."
                         Clock.schedule_interval(self.wait_for_all_files_permission, 1)
                         return
-                    else:
-                        pass
                 else:
-                    perms = [
-                        Permission.READ_EXTERNAL_STORAGE,
-                        Permission.WRITE_EXTERNAL_STORAGE,
-                        Permission.ACCESS_FINE_LOCATION,
-                        Permission.ACCESS_COARSE_LOCATION
-                    ]
-                    if hasattr(Permission, 'BLUETOOTH_SCAN'): perms.append(Permission.BLUETOOTH_SCAN)
-                    if hasattr(Permission, 'BLUETOOTH_CONNECT'): perms.append(Permission.BLUETOOTH_CONNECT)
-                    
+                    perms = [Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
                     request_permissions(perms, self.on_permissions_result)
                     return
             except Exception as e:
                 print(f"[권한 우회] {e}")
-                
         self.start_main_system(0)
 
     def wait_for_all_files_permission(self, dt):
         from jnius import autoclass
         Environment = autoclass('android.os.Environment')
-        
         if Environment.isExternalStorageManager():
             Clock.unschedule(self.wait_for_all_files_permission)
-            self.boot_label.text = "Permission Granted! Starting System..."
-            Clock.schedule_once(self.start_main_system, 0.5)
+            self.start_main_system(0)
 
     def on_permissions_result(self, permissions, grants):
-        self.boot_label.text = "Applying System Settings..."
-        Clock.schedule_once(self.start_main_system, 0.5)
+        self.start_main_system(0)
 
     def start_main_system(self, dt):
         register_external_fonts()
         self.root_layout.clear_widgets()
-        main_ui = MetaRiderMainLayout()
-        self.root_layout.add_widget(main_ui)
+        sm = ScreenManager()
+        sm.add_widget(MainMenuScreen(name='main_menu'))
+        sm.add_widget(SinglePlayerScreen(name='single_player'))
+        sm.add_widget(MultiPlayerScreen(name='multi_player'))
+        self.root_layout.add_widget(sm)
 
 if __name__ == '__main__':
     MetaRiderApp().run()
