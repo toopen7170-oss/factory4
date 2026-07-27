@@ -26,7 +26,7 @@ version = 1.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pyjnius,android
+requirements = python3,kivy,pyjnius,android,ffpyplayer
 
 # (list) Custom source folders for python modules
 #source.lib_dirs = ../(lib)
