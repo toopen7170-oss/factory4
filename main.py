@@ -45,15 +45,22 @@ def global_exception_handler(exctype, value, tb):
 sys.excepthook = global_exception_handler
 
 # ---------------------------------------------------------
-# 3. 폰트 등록 시스템 (다국어 및 범용 폰트 매핑)
+# 3. 폰트 등록 시스템 (손상 파일 체크 및 안전 로드 방어막)
 # ---------------------------------------------------------
+def is_valid_font(path):
+    """폰트 파일이 실제로 존재하고 깨지지 않았는지(최소 1KB 이상) 확인"""
+    try:
+        return os.path.exists(path) and os.path.getsize(path) > 1024
+    except:
+        return False
+
 def register_external_fonts():
     try:
         os.makedirs(FONT_DIR, exist_ok=True)
     except: pass
     
     universal_font = os.path.join(FONT_DIR, 'universal.ttf')
-    has_universal = os.path.exists(universal_font)
+    has_universal = is_valid_font(universal_font)
 
     # 요청하신 다국어 폰트 매핑
     font_mapping = {
@@ -69,18 +76,15 @@ def register_external_fonts():
 
     for font_name, file_name in font_mapping.items():
         font_path = os.path.join(FONT_DIR, file_name)
-        if os.path.exists(font_path):
+        if is_valid_font(font_path):
             LabelBase.register(name=font_name, fn_regular=font_path)
         elif has_universal:
-            # 해당 국가 폰트가 없으면 무조건 universal.ttf 적용
             LabelBase.register(name=font_name, fn_regular=universal_font)
 
-try: register_external_fonts()
-except: pass
-
 def get_safe_font():
-    if os.path.exists(os.path.join(FONT_DIR, 'korean.ttf')): return 'Korean'
-    if os.path.exists(os.path.join(FONT_DIR, 'universal.ttf')): return 'Universal'
+    # 파일이 손상되었거나 권한이 없을 경우 안드로이드 기본 폰트(Roboto)로 우회
+    if is_valid_font(os.path.join(FONT_DIR, 'korean.ttf')): return 'Korean'
+    if is_valid_font(os.path.join(FONT_DIR, 'universal.ttf')): return 'Universal'
     return 'Roboto'
 
 # ---------------------------------------------------------
@@ -90,7 +94,6 @@ if platform == 'android':
     try:
         from jnius import autoclass, PythonJavaClass, java_method
         
-        # 블루투스 스캔 리스너
         class BLEScanCallback(PythonJavaClass):
             __javainterfaces__ = ['android/bluetooth/BluetoothAdapter$LeScanCallback']
             __javacontext__ = 'app'
@@ -103,7 +106,6 @@ if platform == 'android':
                 address = device.getAddress()
                 if name: self.on_device_found(name, address)
 
-        # 블루투스 데이터 리스너
         class BLEGattCallback(PythonJavaClass):
             __javainterfaces__ = ['android/bluetooth/BluetoothGattCallback']
             __javacontext__ = 'app'
@@ -125,7 +127,6 @@ if platform == 'android':
             def onDescriptorWrite(self, gatt, descriptor, status):
                 pass
                 
-        # 연속 재생을 위한 미디어 종료 리스너
         class MusicCompletionListener(PythonJavaClass):
             __javainterfaces__ = ['android/media/MediaPlayer$OnCompletionListener']
             __javacontext__ = 'app'
@@ -140,7 +141,7 @@ if platform == 'android':
         pass
 
 # ---------------------------------------------------------
-# 5. 메인 앱 화면 및 통제 로직
+# 5. 메인 앱 화면 및 통제 로직 (UI)
 # ---------------------------------------------------------
 class MetaRiderMainLayout(BoxLayout):
     def __init__(self, **kwargs):
@@ -150,7 +151,6 @@ class MetaRiderMainLayout(BoxLayout):
         self.spacing = 10
         self.found_devices = {}
         
-        # 파일 목록 및 선택 상태 관리
         self.music_files = []
         self.video_files = []
         self.selected_music_paths = set() 
@@ -158,7 +158,6 @@ class MetaRiderMainLayout(BoxLayout):
         self.prev_crank_rev = -1
         self.prev_crank_time = -1
         
-        # 오디오 플레이어
         self.audio_player = None
         self.is_music_playing = False
         self.play_queue = []
@@ -168,16 +167,14 @@ class MetaRiderMainLayout(BoxLayout):
         
         # 1. 상태 라벨
         self.status_label = Label(
-            text="[시스템 부팅 중] 환경을 설정하고 있습니다...",
+            text="[시스템 부팅 완료] 환경 설정 및 미디어 스캔 정상.",
             font_name=safe_font, font_size='16sp', halign='center', valign='middle', size_hint_y=0.15
         )
         self.status_label.bind(size=self.status_label.setter('text_size'))
         self.add_widget(self.status_label)
 
-        # 2. 미디어 리스트(팝업) 버튼 레이아웃
+        # 2. 미디어 리스트 버튼
         self.media_layout = GridLayout(cols=2, size_hint_y=0.1, spacing=10)
-        
-        # 이모티콘 깨짐 방지를 위해 일반 텍스트 사용
         self.music_btn = Button(text="[음악] 목록 열기", font_name=safe_font, background_color=(0.2, 0.8, 0.2, 1))
         self.music_btn.bind(on_press=self.open_music_popup)
         self.media_layout.add_widget(self.music_btn)
@@ -185,13 +182,10 @@ class MetaRiderMainLayout(BoxLayout):
         self.video_btn = Button(text="[영상] 목록 열기", font_name=safe_font, background_color=(0.8, 0.2, 0.2, 1))
         self.video_btn.bind(on_press=self.open_video_popup)
         self.media_layout.add_widget(self.video_btn)
-        
         self.add_widget(self.media_layout)
 
         # 3. RPM
-        self.rpm_label = Label(
-            text="RPM: 0", font_name=safe_font, font_size='60sp', color=(0, 1, 1, 1), bold=True, size_hint_y=0.3
-        )
+        self.rpm_label = Label(text="RPM: 0", font_name=safe_font, font_size='60sp', color=(0, 1, 1, 1), bold=True, size_hint_y=0.3)
         self.add_widget(self.rpm_label)
         
         # 4. 블루투스 기기 리스트
@@ -212,18 +206,15 @@ class MetaRiderMainLayout(BoxLayout):
 
         Clock.schedule_once(self.start_initialization, 1)
 
-    # ------------------ (초기 인프라 & 자동 스캔) ------------------
     def start_initialization(self, dt):
         target_dirs = [FACTORY_ROOT, CORE_DIR, LOG_DIR, MUSIC_DIR, VIDEO_DIR, FONT_DIR]
         try:
             for directory in target_dirs: os.makedirs(directory, exist_ok=True)
-            self.status_label.text = "[시스템 작동 중] 블루투스 스캔 및 미디어 재생 준비 완료."
             self.status_label.color = (0.2, 1, 0.2, 1)
         except:
-            self.status_label.text = "[주의] 파일 생성 실패. 저장소 권한을 확인해 주세요."
+            self.status_label.text = "[주의] 파일 생성 실패. 안드로이드 설정에서 저장소 권한을 다시 확인해주세요."
             self.status_label.color = (1, 0.5, 0.2, 1)
 
-        # 3초마다 미디어(음악/영상) 폴더를 자동 스캔하여 리스트 갱신
         Clock.schedule_interval(self.scan_media_files, 3.0) 
         self.scan_media_files(0)
 
@@ -245,12 +236,10 @@ class MetaRiderMainLayout(BoxLayout):
             self.video_btn.text = f"[영상] 목록 열기 ({len(self.video_files)}개)"
         except Exception: pass
 
-    # ------------------ (음악 목록 팝업 및 재생 제어) ------------------
     def open_music_popup(self, instance):
         safe_font = get_safe_font()
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
         
-        # 팝업 상단 제어 버튼 (글씨 잘림 방지를 위해 폰트 크기 축소 및 텍스트 간소화)
         top_bar = BoxLayout(size_hint_y=0.15, spacing=5)
         btn_sel_all = Button(text="전체선택", font_name=safe_font, font_size='14sp', background_color=(0.4, 0.4, 0.4, 1))
         btn_desel_all = Button(text="선택해제", font_name=safe_font, font_size='14sp', background_color=(0.4, 0.4, 0.4, 1))
@@ -263,30 +252,19 @@ class MetaRiderMainLayout(BoxLayout):
         top_bar.add_widget(btn_stop)
         content.add_widget(top_bar)
         
-        # 곡 리스트 뷰
         scroll = ScrollView(size_hint_y=0.85)
         list_layout = GridLayout(cols=1, size_hint_y=None, spacing=2)
         list_layout.bind(minimum_height=list_layout.setter('height'))
         
         self.checkbox_refs = {} 
-        
         for m_path in self.music_files:
-            # 글씨 겹침 방지를 위해 리스트 높이를 70으로 확장
             row = BoxLayout(size_hint_y=None, height=70, padding=5)
             cb = CheckBox(size_hint_x=0.15, active=(m_path in self.selected_music_paths))
-            
-            # 글씨 겹침 방지를 위해 shorten(말줄임표) 속성 추가
             lbl = Label(
-                text=os.path.basename(m_path), 
-                font_name=safe_font, 
-                size_hint_x=0.85, 
-                halign='left', 
-                valign='middle',
-                shorten=True, 
-                shorten_from='right'
+                text=os.path.basename(m_path), font_name=safe_font, size_hint_x=0.85, halign='left', valign='middle',
+                shorten=True, shorten_from='right'
             )
             lbl.bind(size=lbl.setter('text_size'))
-            
             row.add_widget(cb)
             row.add_widget(lbl)
             list_layout.add_widget(row)
@@ -294,15 +272,12 @@ class MetaRiderMainLayout(BoxLayout):
             
         scroll.add_widget(list_layout)
         content.add_widget(scroll)
+        popup = Popup(title="음악 플레이리스트", title_font=safe_font, content=content, size_hint=(0.95, 0.9))
         
-        popup = Popup(title="음악 플레이리스트 (체크된 곡만 연속 재생됩니다)", title_font=safe_font, content=content, size_hint=(0.95, 0.9))
-        
-        # 버튼 기능 연결
         btn_sel_all.bind(on_press=lambda x: self.toggle_all_music(True))
         btn_desel_all.bind(on_press=lambda x: self.toggle_all_music(False))
         btn_play.bind(on_press=lambda x: [self.update_selected_music(), self.start_playlist(), popup.dismiss()])
         btn_stop.bind(on_press=lambda x: [self.stop_music(), popup.dismiss()])
-        
         popup.open()
 
     def toggle_all_music(self, state):
@@ -331,25 +306,19 @@ class MetaRiderMainLayout(BoxLayout):
         try:
             from jnius import autoclass
             MediaPlayer = autoclass('android.media.MediaPlayer')
-            
             if self.audio_player:
                 self.audio_player.stop()
                 self.audio_player.release()
-                
             self.audio_player = MediaPlayer()
             self.audio_player.setDataSource(next_song)
-            
             if not hasattr(self, 'completion_listener'):
                 self.completion_listener = MusicCompletionListener(self.play_next_song)
             self.audio_player.setOnCompletionListener(self.completion_listener)
-            
             self.audio_player.prepare()
             self.audio_player.start()
             
             self.is_music_playing = True
-            song_name = os.path.basename(next_song)
-            # 이모티콘 제거 후 재생 상태 표시
-            self.music_btn.text = f"재생중: {song_name[:10]}..."
+            self.music_btn.text = f"재생중: {os.path.basename(next_song)[:10]}..."
             self.music_btn.background_color = (1, 0.5, 0, 1)
         except Exception as e:
             self.status_label.text = f"[음악 오류] {str(e)}"
@@ -366,27 +335,17 @@ class MetaRiderMainLayout(BoxLayout):
         self.music_btn.text = f"[음악] 목록 열기 ({len(self.music_files)}곡)"
         self.music_btn.background_color = (0.2, 0.8, 0.2, 1)
 
-    # ------------------ (동영상 목록 팝업 및 재생 제어) ------------------
     def open_video_popup(self, instance):
         safe_font = get_safe_font()
         content = BoxLayout(orientation='vertical', padding=10)
-        
         scroll = ScrollView(size_hint_y=1.0)
         list_layout = GridLayout(cols=1, size_hint_y=None, spacing=10)
         list_layout.bind(minimum_height=list_layout.setter('height'))
         
-        # 스캔된 비디오 버튼 나열 (이모티콘 제거 및 말줄임표 적용)
         for v_path in self.video_files:
             btn = Button(
-                text=f"{os.path.basename(v_path)}", 
-                font_name=safe_font, 
-                size_hint_y=None, 
-                height=80,
-                halign='left', 
-                valign='middle', 
-                padding=(20, 0),
-                shorten=True, 
-                shorten_from='right'
+                text=f"{os.path.basename(v_path)}", font_name=safe_font, size_hint_y=None, height=80,
+                halign='left', valign='middle', padding=(20, 0), shorten=True, shorten_from='right'
             )
             btn.bind(size=btn.setter('text_size'))
             btn.bind(on_press=lambda x, path=v_path: [self.play_specific_video(path)])
@@ -394,7 +353,6 @@ class MetaRiderMainLayout(BoxLayout):
             
         scroll.add_widget(list_layout)
         content.add_widget(scroll)
-        
         popup = Popup(title="영상 선택 (터치 시 외부 앱으로 팝업 재생)", title_font=safe_font, content=content, size_hint=(0.95, 0.9))
         popup.open()
 
@@ -419,10 +377,9 @@ class MetaRiderMainLayout(BoxLayout):
             except Exception as e:
                 self.status_label.text = f"[영상 실행 오류] {str(e)}"
 
-    # ------------------ (블루투스 센서 제어) ------------------
     def toggle_scan(self, instance):
         if platform != 'android': return
-        if "시작" in self.scan_btn.text: self.start_ble_scan()
+        if "시작" in self.scan_btn.text or "기기 찾기" in self.scan_btn.text: self.start_ble_scan()
         else: self.stop_ble_scan()
 
     def start_ble_scan(self):
@@ -534,9 +491,62 @@ class MetaRiderMainLayout(BoxLayout):
                 self.prev_crank_time = crank_time
         except: pass
 
+# ---------------------------------------------------------
+# 6. 메인 앱 진입점 및 권한 통제 시스템
+# ---------------------------------------------------------
 class MetaRiderApp(App):
     def build(self):
-        return MetaRiderMainLayout()
+        # 권한 확인 전 빈 화면 구축 (폰트 렌더링 충돌 방어)
+        self.root_layout = BoxLayout(orientation='vertical', padding=50)
+        
+        # 권한이 없을 땐 안드로이드 기본 폰트(영어)만 사용하여 Crash 방지
+        self.boot_label = Label(
+            text="System Booting...\nChecking Permissions...", 
+            font_size='20sp', 
+            halign='center'
+        )
+        self.root_layout.add_widget(self.boot_label)
+        
+        Clock.schedule_once(self.check_permissions, 0.5)
+        return self.root_layout
+
+    def check_permissions(self, dt):
+        if platform == 'android':
+            try:
+                from android.permissions import request_permissions, Permission
+                perms = [
+                    Permission.READ_EXTERNAL_STORAGE,
+                    Permission.WRITE_EXTERNAL_STORAGE,
+                    Permission.ACCESS_FINE_LOCATION,
+                    Permission.ACCESS_COARSE_LOCATION
+                ]
+                
+                # 최신 안드로이드 버전 호환을 위한 블루투스 권한 추가
+                if hasattr(Permission, 'BLUETOOTH_SCAN'): perms.append(Permission.BLUETOOTH_SCAN)
+                if hasattr(Permission, 'BLUETOOTH_CONNECT'): perms.append(Permission.BLUETOOTH_CONNECT)
+                
+                # 정식 빌드(APK) 환경일 경우 팝업 호출
+                request_permissions(perms, self.on_permissions_result)
+            except Exception as e:
+                # Pydroid 3 테스트 환경에서 권한 호출 충돌 시, 즉시 우회하여 메인 화면 진입
+                print(f"[알림] 권한 요청 우회 (Pydroid 3 환경 감지): {e}")
+                self.start_main_system(0)
+        else:
+            self.start_main_system(0)
+
+    def on_permissions_result(self, permissions, grants):
+        # 권한 팝업에서 사용자가 누르면 메인 시스템 가동 준비 (정식 앱 전용)
+        self.boot_label.text = "Applying System Settings..."
+        Clock.schedule_once(self.start_main_system, 0.5)
+
+    def start_main_system(self, dt):
+        # 1. 저장소 권한이 허가된 '지금' 폰트 파일들을 안전하게 등록합니다.
+        register_external_fonts()
+        
+        # 2. 임시 부팅 화면을 치우고 진짜 메인 화면을 불러옵니다.
+        self.root_layout.clear_widgets()
+        main_ui = MetaRiderMainLayout()
+        self.root_layout.add_widget(main_ui)
 
 if __name__ == '__main__':
     MetaRiderApp().run()
