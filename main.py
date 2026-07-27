@@ -15,7 +15,7 @@ from kivy.utils import platform
 from kivy.core.text import LabelBase
 
 # ---------------------------------------------------------
-# 1. 경로 설정 (정확한 기기 내장 메모리 경로)
+# 1. 경로 설정 (정확한 기기 내장 메모리 경로 반영)
 # ---------------------------------------------------------
 if platform == 'android':
     FACTORY_ROOT = '/sdcard/Download/factory'
@@ -29,7 +29,7 @@ VIDEO_DIR = os.path.join(CORE_DIR, 'video')
 FONT_DIR = os.path.join(CORE_DIR, 'font')
 
 # ---------------------------------------------------------
-# 2. 블랙박스 (오류 로그 파일 자동 저장)
+# 2. 블랙박스 (오류 로그 자동 저장 - 지정된 경로)
 # ---------------------------------------------------------
 def global_exception_handler(exctype, value, tb):
     error_msg = "".join(traceback.format_exception(exctype, value, tb))
@@ -45,7 +45,7 @@ def global_exception_handler(exctype, value, tb):
 sys.excepthook = global_exception_handler
 
 # ---------------------------------------------------------
-# 3. 폰트 등록 시스템 (손상 파일 체크 및 안전 로드 방어막)
+# 3. 폰트 등록 시스템 (다국어 & Universal 폴백)
 # ---------------------------------------------------------
 def is_valid_font(path):
     """폰트 파일이 실제로 존재하고 깨지지 않았는지(최소 1KB 이상) 확인"""
@@ -76,13 +76,15 @@ def register_external_fonts():
 
     for font_name, file_name in font_mapping.items():
         font_path = os.path.join(FONT_DIR, file_name)
+        
         if is_valid_font(font_path):
             LabelBase.register(name=font_name, fn_regular=font_path)
         elif has_universal:
+            # 해당 국가 폰트가 없으면 universal.ttf를 적용
             LabelBase.register(name=font_name, fn_regular=universal_font)
 
 def get_safe_font():
-    # 파일이 손상되었거나 권한이 없을 경우 안드로이드 기본 폰트(Roboto)로 우회
+    # Kivy가 기본적으로 제공하는 폰트(Roboto)를 최후의 방어막으로 사용
     if is_valid_font(os.path.join(FONT_DIR, 'korean.ttf')): return 'Korean'
     if is_valid_font(os.path.join(FONT_DIR, 'universal.ttf')): return 'Universal'
     return 'Roboto'
@@ -165,7 +167,6 @@ class MetaRiderMainLayout(BoxLayout):
         
         safe_font = get_safe_font()
         
-        # 1. 상태 라벨
         self.status_label = Label(
             text="[시스템 부팅 완료] 환경 설정 및 미디어 스캔 정상.",
             font_name=safe_font, font_size='16sp', halign='center', valign='middle', size_hint_y=0.15
@@ -173,7 +174,6 @@ class MetaRiderMainLayout(BoxLayout):
         self.status_label.bind(size=self.status_label.setter('text_size'))
         self.add_widget(self.status_label)
 
-        # 2. 미디어 리스트 버튼
         self.media_layout = GridLayout(cols=2, size_hint_y=0.1, spacing=10)
         self.music_btn = Button(text="[음악] 목록 열기", font_name=safe_font, background_color=(0.2, 0.8, 0.2, 1))
         self.music_btn.bind(on_press=self.open_music_popup)
@@ -184,18 +184,15 @@ class MetaRiderMainLayout(BoxLayout):
         self.media_layout.add_widget(self.video_btn)
         self.add_widget(self.media_layout)
 
-        # 3. RPM
         self.rpm_label = Label(text="RPM: 0", font_name=safe_font, font_size='60sp', color=(0, 1, 1, 1), bold=True, size_hint_y=0.3)
         self.add_widget(self.rpm_label)
         
-        # 4. 블루투스 기기 리스트
         self.scroll_view = ScrollView(size_hint_y=0.3)
         self.device_list_layout = GridLayout(cols=1, spacing=10, size_hint_y=None)
         self.device_list_layout.bind(minimum_height=self.device_list_layout.setter('height'))
         self.scroll_view.add_widget(self.device_list_layout)
         self.add_widget(self.scroll_view)
         
-        # 5. 블루투스 스캔 버튼
         self.scan_btn = Button(
             text="블루투스 기기 찾기", font_name=safe_font, size_hint_y=0.15, background_color=(0.2, 0.6, 1, 1),
             halign='center', valign='middle'
@@ -211,26 +208,30 @@ class MetaRiderMainLayout(BoxLayout):
         try:
             for directory in target_dirs: os.makedirs(directory, exist_ok=True)
             self.status_label.color = (0.2, 1, 0.2, 1)
-        except:
-            self.status_label.text = "[주의] 파일 생성 실패. 안드로이드 설정에서 저장소 권한을 다시 확인해주세요."
+        except Exception as e:
+            self.status_label.text = f"[경고] 파일 생성 실패: {e}"
             self.status_label.color = (1, 0.5, 0.2, 1)
 
-        Clock.schedule_interval(self.scan_media_files, 3.0) 
+        # 요청하신 대로 30초마다 음악/비디오 폴더를 스캔하여 자동 업데이트
+        Clock.schedule_interval(self.scan_media_files, 30.0) 
         self.scan_media_files(0)
 
     def scan_media_files(self, dt=0):
         try:
+            # 음악 스캔
             if os.path.exists(MUSIC_DIR):
                 new_music = glob.glob(os.path.join(MUSIC_DIR, '*.mp3'))
                 for m in new_music:
                     if m not in self.music_files: self.selected_music_paths.add(m)
                 self.music_files = new_music
             
+            # 비디오 스캔 (새로운 동영상이 올라오면 자동 스캔)
             if os.path.exists(VIDEO_DIR):
                 v_exts = ('*.mp4', '*.avi', '*.mkv', '*.mov')
                 self.video_files = []
                 for ext in v_exts: self.video_files.extend(glob.glob(os.path.join(VIDEO_DIR, ext)))
             
+            # 버튼 UI 업데이트
             if not self.is_music_playing:
                 self.music_btn.text = f"[음악] 목록 열기 ({len(self.music_files)}곡)"
             self.video_btn.text = f"[영상] 목록 열기 ({len(self.video_files)}개)"
@@ -492,14 +493,11 @@ class MetaRiderMainLayout(BoxLayout):
         except: pass
 
 # ---------------------------------------------------------
-# 6. 메인 앱 진입점 및 권한 통제 시스템
+# 6. 메인 앱 진입점 및 권한 통제 시스템 (Android 11 완벽 대응)
 # ---------------------------------------------------------
 class MetaRiderApp(App):
     def build(self):
-        # 권한 확인 전 빈 화면 구축 (폰트 렌더링 충돌 방어)
         self.root_layout = BoxLayout(orientation='vertical', padding=50)
-        
-        # 권한이 없을 땐 안드로이드 기본 폰트(영어)만 사용하여 Crash 방지
         self.boot_label = Label(
             text="System Booting...\nChecking Permissions...", 
             font_size='20sp', 
@@ -513,37 +511,66 @@ class MetaRiderApp(App):
     def check_permissions(self, dt):
         if platform == 'android':
             try:
+                from jnius import autoclass
                 from android.permissions import request_permissions, Permission
-                perms = [
-                    Permission.READ_EXTERNAL_STORAGE,
-                    Permission.WRITE_EXTERNAL_STORAGE,
-                    Permission.ACCESS_FINE_LOCATION,
-                    Permission.ACCESS_COARSE_LOCATION
-                ]
                 
-                # 최신 안드로이드 버전 호환을 위한 블루투스 권한 추가
-                if hasattr(Permission, 'BLUETOOTH_SCAN'): perms.append(Permission.BLUETOOTH_SCAN)
-                if hasattr(Permission, 'BLUETOOTH_CONNECT'): perms.append(Permission.BLUETOOTH_CONNECT)
+                VERSION = autoclass('android.os.Build$VERSION')
                 
-                # 정식 빌드(APK) 환경일 경우 팝업 호출
-                request_permissions(perms, self.on_permissions_result)
+                # Android 11 (API 30) 이상: '모든 파일에 대한 접근' 특별 권한 요청
+                if VERSION.SDK_INT >= 30:
+                    Environment = autoclass('android.os.Environment')
+                    
+                    if not Environment.isExternalStorageManager():
+                        Intent = autoclass('android.content.Intent')
+                        Settings = autoclass('android.provider.Settings')
+                        Uri = autoclass('android.net.Uri')
+                        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                        
+                        # 권한 설정 화면으로 이동
+                        intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                        uri = Uri.parse("package:" + PythonActivity.mActivity.getPackageName())
+                        intent.setData(uri)
+                        PythonActivity.mActivity.startActivity(intent)
+                        
+                        self.boot_label.text = "Please allow 'All Files Access' in settings.\n(설정에서 모든 파일 접근 권한을 허용해주세요)"
+                        
+                        # 권한을 승인할 때까지 반복해서 체크
+                        Clock.schedule_interval(self.wait_for_all_files_permission, 1)
+                        return
+                    else:
+                        pass
+                else:
+                    perms = [
+                        Permission.READ_EXTERNAL_STORAGE,
+                        Permission.WRITE_EXTERNAL_STORAGE,
+                        Permission.ACCESS_FINE_LOCATION,
+                        Permission.ACCESS_COARSE_LOCATION
+                    ]
+                    if hasattr(Permission, 'BLUETOOTH_SCAN'): perms.append(Permission.BLUETOOTH_SCAN)
+                    if hasattr(Permission, 'BLUETOOTH_CONNECT'): perms.append(Permission.BLUETOOTH_CONNECT)
+                    
+                    request_permissions(perms, self.on_permissions_result)
+                    return
             except Exception as e:
-                # Pydroid 3 테스트 환경에서 권한 호출 충돌 시, 즉시 우회하여 메인 화면 진입
-                print(f"[알림] 권한 요청 우회 (Pydroid 3 환경 감지): {e}")
-                self.start_main_system(0)
-        else:
-            self.start_main_system(0)
+                print(f"[권한 우회] {e}")
+                
+        self.start_main_system(0)
+
+    def wait_for_all_files_permission(self, dt):
+        from jnius import autoclass
+        Environment = autoclass('android.os.Environment')
+        
+        if Environment.isExternalStorageManager():
+            Clock.unschedule(self.wait_for_all_files_permission)
+            self.boot_label.text = "Permission Granted! Starting System..."
+            Clock.schedule_once(self.start_main_system, 0.5)
 
     def on_permissions_result(self, permissions, grants):
-        # 권한 팝업에서 사용자가 누르면 메인 시스템 가동 준비 (정식 앱 전용)
         self.boot_label.text = "Applying System Settings..."
         Clock.schedule_once(self.start_main_system, 0.5)
 
     def start_main_system(self, dt):
-        # 1. 저장소 권한이 허가된 '지금' 폰트 파일들을 안전하게 등록합니다.
         register_external_fonts()
-        
-        # 2. 임시 부팅 화면을 치우고 진짜 메인 화면을 불러옵니다.
         self.root_layout.clear_widgets()
         main_ui = MetaRiderMainLayout()
         self.root_layout.add_widget(main_ui)
